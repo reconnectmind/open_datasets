@@ -54,7 +54,7 @@ def read_csv(name):
         return reader.fieldnames, list(reader)
 
 
-registry_header, registry = read_csv("registry.csv")
+registry_header, registry = read_csv("public/registry.csv")
 
 assert registry_header == registry_fields, registry_header
 assert len(registry) == 47, len(registry)
