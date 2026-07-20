@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Реестр открытых fNIRS-датасетов</title>
+<style>
+  :root {
+    --bg: #0f1116;
+    --panel: #171a21;
+    --panel-2: #1e222b;
+    --border: #2a2f3a;
+    --text: #e6e8ec;
+    --muted: #97a0ad;
+    --accent: #5b9dff;
+    --green: #3fb950;
+    --amber: #d29922;
+    --red: #f85149;
+    --gray: #6e7681;
+    --shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 24px; }
+  header h1 { font-size: 22px; margin: 0 0 4px; }
+  header p { color: var(--muted); margin: 0 0 20px; }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .stat .num { font-size: 26px; font-weight: 700; }
+  .stat .lbl { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; }
+  .controls input[type="search"], .controls select {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 12px; font-size: 14px; outline: none;
+  }
+  .controls input[type="search"] { min-width: 260px; flex: 1; }
+  .controls input:focus, .controls select:focus { border-color: var(--accent); }
+  .chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+  .chip {
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 999px; padding: 5px 12px; font-size: 12px; cursor: pointer; user-select: none;
+  }
+  .chip.on { background: rgba(91, 157, 255, 0.15); border-color: var(--accent); color: var(--text); }
+  .muted { color: var(--muted); }
+
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); cursor: pointer; white-space: nowrap; position: sticky; top: 0; background: var(--panel-2); z-index: 1; }
+  th .arrow { opacity: 0.5; font-size: 10px; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: var(--panel-2); }
+  td.key { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; white-space: nowrap; }
+  td.title { max-width: 380px; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .tag.verified { background: rgba(63, 185, 80, 0.15); color: var(--green); }
+  .tag.partial { background: rgba(210, 153, 34, 0.15); color: var(--amber); }
+  .tag.warn { background: rgba(248, 81, 73, 0.15); color: var(--red); }
+  .tag.unavailable { background: rgba(110, 118, 129, 0.2); color: var(--gray); }
+  .modtag { display: inline-block; background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 1px 7px; font-size: 11px; margin: 1px 2px 1px 0; }
+
+  /* Drawer */
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); opacity: 0; pointer-events: none; transition: opacity 0.15s; z-index: 10; }
+  .overlay.open { opacity: 1; pointer-events: auto; }
+  .drawer {
+    position: fixed; top: 0; right: 0; height: 100%; width: min(680px, 92vw);
+    background: var(--panel); border-left: 1px solid var(--border); box-shadow: var(--shadow);
+    transform: translateX(100%); transition: transform 0.2s ease; z-index: 11; overflow-y: auto;
+  }
+  .drawer.open { transform: translateX(0); }
+  .drawer-inner { padding: 24px; }
+  .drawer h2 { margin: 0 0 4px; font-size: 18px; }
+  .drawer .sub { color: var(--muted); font-family: ui-monospace, monospace; font-size: 12px; margin-bottom: 16px; }
+  .close { position: absolute; top: 16px; right: 20px; font-size: 22px; color: var(--muted); cursor: pointer; background: none; border: none; }
+  .field { margin-bottom: 14px; }
+  .field .flabel { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 3px; }
+  .field .fval { font-size: 14px; }
+  .feat { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+  .feat .fg { font-weight: 600; margin-bottom: 4px; display: flex; justify-content: space-between; gap: 8px; }
+  .feat .meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .feat .meta b { color: var(--text); font-weight: 500; }
+  .err { background: rgba(248, 81, 73, 0.1); border: 1px solid var(--red); color: var(--red); padding: 16px; border-radius: 10px; }
+  .err code { background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; }
+  footer { color: var(--muted); font-size: 12px; margin-top: 24px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Реестр открытых fNIRS-датасетов</h1>
+    <p id="subtitle">Загрузка <code>registry.csv</code>…</p>
+  </header>
+
+  <div id="app" hidden>
+    <div class="stats" id="stats"></div>
+
+    <div class="controls">
+      <input type="search" id="search" placeholder="Поиск по названию, задаче, ключу, заметкам…" />
+      <select id="fSource"><option value="">Все источники</option></select>
+      <select id="fLicense"><option value="">Все лицензии</option></select>
+      <select id="fCount"><option value="">Любой статус подсчёта</option></select>
+      <select id="fModality"><option value="">Любая модальность</option></select>
+      <select id="sortSel">
+        <option value="dataset_key">Сорт.: ключ</option>
+        <option value="n_recordings">Сорт.: записи</option>
+        <option value="n_subjects">Сорт.: участники</option>
+        <option value="source">Сорт.: источник</option>
+        <option value="title">Сорт.: название</option>
+      </select>
+    </div>
+
+    <div class="chip-row" id="featChips"></div>
+
+    <table>
+      <thead>
+        <tr id="head"></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p class="muted" id="resultCount" style="margin-top:12px"></p>
+  </div>
+
+  <div id="errBox"></div>
+
+  <footer>
+    Данные: <a href="./registry.csv">registry.csv</a> · символы статуса: ✓ verified, ~ partial, ! metadata-warning, — unavailable.
+  </footer>
+</div>
+
+<div class="overlay" id="overlay"></div>
+<aside class="drawer" id="drawer">
+  <button class="close" id="closeBtn" aria-label="Закрыть">×</button>
+  <div class="drawer-inner" id="drawerBody"></div>
+</aside>
+
+<script>
+"use strict";
+
+// --- Minimal robust CSV parser (RFC-4180-ish: quotes, commas, newlines) ---
+function parseCSV(text) {
+  const rows = [];
+  let row = [], field = "", i = 0, inQ = false;
+  const n = text.length;
+  while (i < n) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i += 2; continue; }
+        inQ = false; i++; continue;
+      }
+      field += c; i++; continue;
+    }
+    if (c === '"') { inQ = true; i++; continue; }
+    if (c === ',') { row.push(field); field = ""; i++; continue; }
+    if (c === '\r') { i++; continue; }
+    if (c === '\n') { row.push(field); rows.push(row); row = []; field = ""; i++; continue; }
+    field += c; i++;
+  }
+  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+const FEATURE_COLS = {
+  features_labels_events: "Метки / события",
+  features_behavior: "Поведение",
+  features_demographics: "Демография",
+  features_clinical: "Клинические",
+  features_questionnaires: "Опросники",
+  features_physiology: "Физиология",
+  features_motion: "Движение",
+  features_spatial_optode_metadata: "Оптоды / пространство",
+  features_stimuli: "Стимулы",
+  features_other_modalities: "Другие модальности",
+  features_other: "Прочее",
+};
+
+const STATUS_CLASS = { verified: "verified", partial: "partial", "metadata-warning": "warn", unavailable: "unavailable" };
+const STATUS_SYMBOL = { verified: "✓", partial: "~", "metadata-warning": "!", unavailable: "—" };
+
+function parseFeatureCell(raw) {
+  if (!raw) return null;
+  const parts = raw.split(" || ");
+  const out = { features: parts[0], format: "", level: "", status: "", evidence: "", notes: "" };
+  for (let k = 1; k < parts.length; k++) {
+    const eq = parts[k].indexOf("=");
+    if (eq === -1) continue;
+    const key = parts[k].slice(0, eq).trim();
+    const val = parts[k].slice(eq + 1).trim();
+    if (key in out) out[key] = val;
+  }
+  return out;
+}
+
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"]/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m]));
+}
+
+let DATA = [], HEADER = [];
+const state = { search: "", source: "", license: "", count: "", modality: "", sort: "dataset_key", asc: true, feats: new Set() };
+
+async function boot() {
+  let text;
+  try {
+    const res = await fetch("./registry.csv", { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    text = await res.text();
+  } catch (e) {
+    showError(e);
+    return;
+  }
+  const rows = parseCSV(text).filter((r) => r.length > 1 && r.some((c) => c !== ""));
+  HEADER = rows[0];
+  DATA = rows.slice(1).map((r) => {
+    const o = {};
+    HEADER.forEach((h, idx) => (o[h] = r[idx] != null ? r[idx] : ""));
+    o._recNum = /^\d+$/.test(o.n_recordings) ? parseInt(o.n_recordings, 10) : null;
+    o._subNum = /^\d+$/.test(o.n_subjects) ? parseInt(o.n_subjects, 10) : null;
+    return o;
+  });
+  document.getElementById("subtitle").innerHTML =
+    'Интерактивный просмотр <a href="./registry.csv">registry.csv</a> — ' + DATA.length + " датасетов.";
+  document.getElementById("app").hidden = false;
+  buildFacets();
+  buildHead();
+  buildFeatChips();
+  wire();
+  render();
+}
+
+function uniqVals(field, splitBy) {
+  const set = new Set();
+  DATA.forEach((d) => {
+    if (!d[field]) return;
+    if (splitBy) d[field].split(splitBy).map((s) => s.trim()).filter(Boolean).forEach((v) => set.add(v));
+    else set.add(d[field]);
+  });
+  return [...set].sort((a, b) => a.localeCompare(b));
+}
+
+function fillSelect(id, vals) {
+  const sel = document.getElementById(id);
+  vals.forEach((v) => {
+    const o = document.createElement("option");
+    o.value = v; o.textContent = v; sel.appendChild(o);
+  });
+}
+
+function buildFacets() {
+  fillSelect("fSource", uniqVals("source"));
+  fillSelect("fLicense", uniqVals("license"));
+  fillSelect("fCount", uniqVals("count_status"));
+  fillSelect("fModality", uniqVals("modalities", ";"));
+}
+
+function buildFeatChips() {
+  const box = document.getElementById("featChips");
+  box.innerHTML = '<span class="muted" style="align-self:center;margin-right:4px">Есть признаки:</span>';
+  Object.entries(FEATURE_COLS).forEach(([col, label]) => {
+    const count = DATA.filter((d) => d[col]).length;
+    if (!count) return;
+    const c = document.createElement("span");
+    c.className = "chip";
+    c.textContent = label + " (" + count + ")";
+    c.onclick = () => {
+      if (state.feats.has(col)) { state.feats.delete(col); c.classList.remove("on"); }
+      else { state.feats.add(col); c.classList.add("on"); }
+      render();
+    };
+    box.appendChild(c);
+  });
+}
+
+const COLS = [
+  { k: "dataset_key", label: "Ключ", cls: "key" },
+  { k: "source", label: "Источник" },
+  { k: "title", label: "Название", cls: "title" },
+  { k: "modalities", label: "Модальности" },
+  { k: "n_subjects", label: "N", cls: "num" },
+  { k: "n_recordings", label: "Записи", cls: "num" },
+  { k: "license", label: "Лицензия" },
+  { k: "count_status", label: "Подсчёт" },
+];
+
+function buildHead() {
+  document.getElementById("head").innerHTML = COLS.map(
+    (c) => `<th data-k="${c.k}">${esc(c.label)} <span class="arrow"></span></th>`
+  ).join("");
+  document.querySelectorAll("#head th").forEach((th) => {
+    th.onclick = () => {
+      const k = th.dataset.k;
+      if (state.sort === k) state.asc = !state.asc;
+      else { state.sort = k; state.asc = true; }
+      document.getElementById("sortSel").value = k;
+      render();
+    };
+  });
+}
+
+function wire() {
+  document.getElementById("search").oninput = (e) => { state.search = e.target.value.toLowerCase(); render(); };
+  document.getElementById("fSource").onchange = (e) => { state.source = e.target.value; render(); };
+  document.getElementById("fLicense").onchange = (e) => { state.license = e.target.value; render(); };
+  document.getElementById("fCount").onchange = (e) => { state.count = e.target.value; render(); };
+  document.getElementById("fModality").onchange = (e) => { state.modality = e.target.value; render(); };
+  document.getElementById("sortSel").onchange = (e) => { state.sort = e.target.value; state.asc = true; render(); };
+  document.getElementById("closeBtn").onclick = closeDrawer;
+  document.getElementById("overlay").onclick = closeDrawer;
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
+}
+
+function filtered() {
+  return DATA.filter((d) => {
+    if (state.source && d.source !== state.source) return false;
+    if (state.license && d.license !== state.license) return false;
+    if (state.count && d.count_status !== state.count) return false;
+    if (state.modality && !d.modalities.split(";").map((s) => s.trim()).includes(state.modality)) return false;
+    for (const col of state.feats) if (!d[col]) return false;
+    if (state.search) {
+      const hay = (d.dataset_key + " " + d.title + " " + d.task_description + " " + d.paradigm + " " + d.notes + " " + d.description).toLowerCase();
+      if (!hay.includes(state.search)) return false;
+    }
+    return true;
+  });
+}
+
+function sortRows(rows) {
+  const k = state.sort, dir = state.asc ? 1 : -1;
+  const numeric = k === "n_recordings" || k === "n_subjects";
+  return rows.slice().sort((a, b) => {
+    if (numeric) {
+      const av = a[k === "n_recordings" ? "_recNum" : "_subNum"];
+      const bv = b[k === "n_recordings" ? "_recNum" : "_subNum"];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      return (av - bv) * dir;
+    }
+    return String(a[k]).localeCompare(String(b[k])) * dir;
+  });
+}
+
+function statusTag(s) {
+  const cls = STATUS_CLASS[s] || "unavailable";
+  return `<span class="tag ${cls}">${STATUS_SYMBOL[s] || "—"} ${esc(s)}</span>`;
+}
+
+function render() {
+  const rows = sortRows(filtered());
+  const tbody = document.getElementById("rows");
+  tbody.innerHTML = rows.map((d, idx) => {
+    const mods = d.modalities.split(";").map((m) => m.trim()).filter(Boolean).map((m) => `<span class="modtag">${esc(m)}</span>`).join("");
+    return `<tr data-i="${DATA.indexOf(d)}">
+      <td class="key">${esc(d.dataset_key)}</td>
+      <td>${esc(d.source)}<div class="muted" style="font-size:11px">${esc(d.source_version)}</div></td>
+      <td class="title">${esc(d.title)}</td>
+      <td>${mods}</td>
+      <td class="num">${esc(d.n_subjects)}</td>
+      <td class="num">${esc(d.n_recordings || "—")}</td>
+      <td>${esc(d.license)}</td>
+      <td>${statusTag(d.count_status)}</td>
+    </tr>`;
+  }).join("");
+  tbody.querySelectorAll("tr").forEach((tr) => (tr.onclick = () => openDrawer(DATA[+tr.dataset.i])));
+  document.querySelectorAll("#head th").forEach((th) => {
+    const a = th.querySelector(".arrow");
+    a.textContent = th.dataset.k === state.sort ? (state.asc ? "▲" : "▼") : "";
+  });
+  document.getElementById("resultCount").textContent =
+    "Показано " + rows.length + " из " + DATA.length + " датасетов.";
+  renderStats(rows);
+}
+
+function renderStats(rows) {
+  const totalRec = rows.reduce((s, d) => s + (d._recNum || 0), 0);
+  const verified = rows.filter((d) => d.count_status === "verified").length;
+  const sources = new Set(rows.map((d) => d.source)).size;
+  const withExtra = rows.filter((d) => Object.keys(FEATURE_COLS).some((c) => c !== "features_labels_events" && c !== "features_spatial_optode_metadata" && d[c])).length;
+  const cards = [
+    ["Датасеты", rows.length],
+    ["Σ записей", totalRec.toLocaleString("ru-RU")],
+    ["Verified подсчёт", verified],
+    ["Источников", sources],
+    ["С доп. признаками", withExtra],
+  ];
+  document.getElementById("stats").innerHTML = cards
+    .map((c) => `<div class="stat"><div class="num">${c[1]}</div><div class="lbl">${esc(c[0])}</div></div>`)
+    .join("");
+}
+
+function field(label, val, isHtml) {
+  if (!val) return "";
+  return `<div class="field"><div class="flabel">${esc(label)}</div><div class="fval">${isHtml ? val : esc(val)}</div></div>`;
+}
+
+function openDrawer(d) {
+  const feats = Object.entries(FEATURE_COLS)
+    .map(([col, label]) => {
+      const f = parseFeatureCell(d[col]);
+      if (!f) return "";
+      const st = f.status ? `<span class="tag ${STATUS_CLASS[f.status] || "unavailable"}">${STATUS_SYMBOL[f.status] || ""} ${esc(f.status)}</span>` : "";
+      return `<div class="feat">
+        <div class="fg"><span>${esc(label)}</span>${st}</div>
+        <div>${esc(f.features)}</div>
+        <div class="meta">${f.format ? `<b>формат:</b> ${esc(f.format)} · ` : ""}${f.level ? `<b>уровень:</b> ${esc(f.level)}` : ""}${f.evidence ? `<br><b>основание:</b> ${esc(f.evidence)}` : ""}${f.notes ? `<br><b>прим.:</b> ${esc(f.notes)}` : ""}</div>
+      </div>`;
+    })
+    .join("");
+
+  const body = document.getElementById("drawerBody");
+  body.innerHTML = `
+    <h2>${esc(d.title)}</h2>
+    <div class="sub">${esc(d.dataset_key)} · ${esc(d.source)} ${esc(d.source_version)}</div>
+    <div style="margin-bottom:16px">${statusTag(d.count_status)} <span class="tag ${d.metadata_status === "verified-core" ? "verified" : d.metadata_status === "partial" ? "partial" : "warn"}">${esc(d.metadata_status)}</span></div>
+    ${field("Описание", d.description)}
+    ${field("Задача", d.task_description)}
+    ${field("Парадигма", d.paradigm)}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
+      ${field("Популяция", d.population)}
+      ${field("Участники (N)", d.n_subjects)}
+      ${field("Записей", d.n_recordings || "—")}
+      ${field("Модальности", d.modalities)}
+      ${field("Формат", d.format)}
+      ${field("fNIRS-формат", d.fnirs_format)}
+      ${field("Размер", d.size)}
+      ${field("Лицензия", d.license)}
+    </div>
+    ${field("Основание подсчёта", d.recording_count_basis)}
+    ${field("Доступ", `${esc(d.access_method)}<br><a href="${esc(d.access_url)}" target="_blank" rel="noopener">${esc(d.access_url)}</a>`, true)}
+    ${field("Доказательство", `<a href="${esc(d.evidence_url)}" target="_blank" rel="noopener">${esc(d.evidence_url)}</a>`, true)}
+    ${field("Заметки", d.notes)}
+    ${feats ? `<div class="flabel" style="margin:18px 0 8px">Сопутствующие признаки</div>${feats}` : ""}
+  `;
+  document.getElementById("overlay").classList.add("open");
+  document.getElementById("drawer").classList.add("open");
+}
+
+function closeDrawer() {
+  document.getElementById("overlay").classList.remove("open");
+  document.getElementById("drawer").classList.remove("open");
+}
+
+function showError(e) {
+  document.getElementById("subtitle").textContent = "";
+  document.getElementById("errBox").innerHTML =
+    `<div class="err"><b>Не удалось загрузить registry.csv:</b> ${esc(e.message)}.<br><br>
+    Браузер блокирует <code>fetch</code> локальных файлов через <code>file://</code>. Запустите локальный сервер из папки датасетов:
+    <br><br><code>python3 -m http.server 8000</code><br><br>
+    и откройте <a href="http://localhost:8000/index.html">http://localhost:8000/index.html</a>.</div>`;
+}
+
+boot();
+</script>
+</body>
+</html>
