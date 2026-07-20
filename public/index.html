@@ -69,6 +69,31 @@
   .tag.unavailable { background: rgba(110, 118, 129, 0.2); color: var(--gray); }
   .modtag { display: inline-block; background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 1px 7px; font-size: 11px; margin: 1px 2px 1px 0; }
 
+  /* Dashboard header + help popover */
+  .dash-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .dash-title { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+  .help {
+    position: relative; display: inline-flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--border);
+    background: var(--panel-2); color: var(--muted); font-size: 12px; font-weight: 700;
+    cursor: help; user-select: none; outline: none;
+  }
+  .help:hover, .help:focus-visible, .help.open { border-color: var(--accent); color: var(--text); }
+  .help-pop {
+    position: absolute; top: calc(100% + 8px); left: 0; z-index: 20;
+    width: min(420px, 88vw); background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; box-shadow: var(--shadow); padding: 14px 16px; cursor: default;
+    opacity: 0; visibility: hidden; transform: translateY(-4px); transition: opacity 0.12s, transform 0.12s;
+    font-weight: 400; letter-spacing: normal; text-transform: none; color: var(--text); font-size: 13px; line-height: 1.5;
+  }
+  .help:hover .help-pop, .help:focus-within .help-pop, .help.open .help-pop { opacity: 1; visibility: visible; transform: translateY(0); }
+  .help-pop h4 { margin: 12px 0 5px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  .help-pop h4:first-child { margin-top: 0; }
+  .help-pop p { margin: 0 0 4px; }
+  .help-pop .row { display: flex; gap: 8px; margin-bottom: 5px; align-items: baseline; }
+  .help-pop .row .tag { flex: none; }
+  .help-pop b { font-weight: 600; }
+
   /* Drawer */
   .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); opacity: 0; pointer-events: none; transition: opacity 0.15s; z-index: 10; }
   .overlay.open { opacity: 1; pointer-events: auto; }
@@ -102,6 +127,28 @@
   </header>
 
   <div id="app" hidden>
+    <div class="dash-head">
+      <span class="dash-title">Обзор</span>
+      <span class="help" id="help" tabindex="0" role="button" aria-label="Как читать показатели">?
+        <span class="help-pop">
+          <h4>Статус подсчёта</h4>
+          <div class="row"><span class="tag verified">✓ verified</span><span>счётчик записей проверен по фактическому file tree / манифесту.</span></div>
+          <div class="row"><span class="tag partial">~ partial</span><span>структура подтверждена, но не перечислена целиком (напр. без полной загрузки).</span></div>
+          <div class="row"><span class="tag warn">! warning</span><span>предупреждение о метаданных источника (шаблонный текст, пустые поля).</span></div>
+          <div class="row"><span class="tag unavailable">— n/a</span><span>подсчёт недоступен.</span></div>
+          <p class="muted" style="margin-top:6px"><b>verified</b> = проверено по первоисточнику, а не выведено из описания. Пустая ячейка означает «не подтверждено», а не «отсутствует».</p>
+
+          <h4>Запись</h4>
+          <p>Минимальная сырая единица, которую можно анализировать независимо: для BIDS NIRS — уникальный <code>participant × session × task × run</code> файл, для NIRx — один stem файлов, для WFDB — одна запись. Это <b>не</b> число участников или trials; sidecars и <code>events.tsv</code> счётчик не увеличивают.</p>
+
+          <h4>Источник</h4>
+          <p>Репозиторий/платформа, где опубликован датасет (OpenNeuro, Zenodo, OSF, Mendeley, Dryad, …), вместе с версией записи. Каталоги и репозитории сами по себе в таблицу не включены.</p>
+
+          <h4>Доп. признаки</h4>
+          <p>Сопутствующие данные помимо fNIRS: поведение, демография, клинические, опросники, физиология, движение, оптоды/пространство, стимулы, другие модальности. Перечислены только положительно подтверждённые.</p>
+        </span>
+      </span>
+    </div>
     <div class="stats" id="stats"></div>
 
     <div class="controls">
@@ -315,7 +362,11 @@ function wire() {
   document.getElementById("sortSel").onchange = (e) => { state.sort = e.target.value; state.asc = true; render(); };
   document.getElementById("closeBtn").onclick = closeDrawer;
   document.getElementById("overlay").onclick = closeDrawer;
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
+  const help = document.getElementById("help");
+  help.onclick = (e) => { e.stopPropagation(); help.classList.toggle("open"); };
+  help.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); help.classList.toggle("open"); } };
+  document.addEventListener("click", (e) => { if (!help.contains(e.target)) help.classList.remove("open"); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeDrawer(); help.classList.remove("open"); } });
 }
 
 function filtered() {
