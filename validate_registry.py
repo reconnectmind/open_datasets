@@ -31,6 +31,10 @@ registry_fields = [
     "recording_count_basis",
     "fnirs_format",
     "count_status",
+    "fnirs_duration_min_s",
+    "fnirs_duration_max_s",
+    "duration_basis",
+    "duration_status",
     "features_labels_events",
     "features_behavior",
     "features_demographics",
@@ -44,6 +48,7 @@ registry_fields = [
     "features_other",
 ]
 count_statuses = {"verified", "partial", "metadata-warning", "unavailable"}
+duration_statuses = {"verified", "partial", "unavailable"}
 feature_statuses = {"verified", "partial", "metadata-warning"}
 feature_columns = [field for field in registry_fields if field.startswith("features_")]
 
@@ -57,7 +62,7 @@ def read_csv(name):
 registry_header, registry = read_csv("public/registry.csv")
 
 assert registry_header == registry_fields, registry_header
-assert len(registry) == 47, len(registry)
+assert len(registry) == 48, len(registry)
 assert len({row["dataset_key"] for row in registry}) == len(registry)
 assert all(None not in row for row in registry)
 assert all(value == value.strip() for row in registry for value in row.values())
@@ -65,10 +70,35 @@ assert all(row["task_description"] for row in registry)
 assert all(row["recording_count_basis"] for row in registry)
 assert all(row["fnirs_format"] for row in registry)
 assert {row["count_status"] for row in registry} <= count_statuses
+assert {row["duration_status"] for row in registry} <= duration_statuses
+assert all(row["duration_basis"] for row in registry)
 assert all(
     (row["n_recordings"].isdigit() and int(row["n_recordings"]) > 0)
     or (row["n_recordings"] == "0" and row["count_status"] == "metadata-warning")
     or (not row["n_recordings"] and row["count_status"] == "unavailable")
+    for row in registry
+)
+assert all(
+    not value or re.fullmatch(r"\d+(?:\.\d+)?", value)
+    for row in registry
+    for value in (row["fnirs_duration_min_s"], row["fnirs_duration_max_s"])
+)
+assert all(
+    (
+        row["duration_status"] == "unavailable"
+        and not row["fnirs_duration_min_s"]
+        and not row["fnirs_duration_max_s"]
+    )
+    or (
+        row["duration_status"] == "partial"
+        and bool(row["fnirs_duration_min_s"] or row["fnirs_duration_max_s"])
+    )
+    or (
+        row["duration_status"] == "verified"
+        and bool(row["fnirs_duration_min_s"])
+        and bool(row["fnirs_duration_max_s"])
+        and float(row["fnirs_duration_min_s"]) <= float(row["fnirs_duration_max_s"])
+    )
     for row in registry
 )
 assert all(
@@ -110,6 +140,7 @@ for line, row in zip(body, registry):
 
 print(f"registry.csv: {len(registry)} rows, {len(registry_header)} columns")
 print("count statuses:", dict(sorted(Counter(row["count_status"] for row in registry).items())))
+print("duration statuses:", dict(sorted(Counter(row["duration_status"] for row in registry).items())))
 print(
     "feature columns:",
     {field: sum(bool(row[field]) for row in registry) for field in feature_columns},

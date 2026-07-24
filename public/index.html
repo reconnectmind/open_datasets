@@ -141,6 +141,9 @@
           <h4>Запись</h4>
           <p>Минимальная сырая единица, которую можно анализировать независимо: для BIDS NIRS — уникальный <code>participant × session × task × run</code> файл, для NIRx — один stem файлов, для WFDB — одна запись. Это <b>не</b> число участников или trials; sidecars и <code>events.tsv</code> счётчик не увеличивают.</p>
 
+          <h4>Длина fNIRS</h4>
+          <p>Min–max длительности одной независимо анализируемой raw fNIRS-записи, а не сумма по датасету. <b>verified</b> вычислен по samples/time vector/header, <b>partial</b> основан на протоколе или неполной границе, <b>unavailable</b> означает, что диапазон обосновать нельзя.</p>
+
           <h4>Источник</h4>
           <p>Репозиторий/платформа, где опубликован датасет (OpenNeuro, Zenodo, OSF, Mendeley, Dryad, …), вместе с версией записи. Каталоги и репозитории сами по себе в таблицу не включены.</p>
 
@@ -160,6 +163,7 @@
       <select id="sortSel">
         <option value="dataset_key">Сорт.: ключ</option>
         <option value="n_recordings">Сорт.: записи</option>
+        <option value="fnirs_duration_max_s">Сорт.: длина fNIRS</option>
         <option value="n_subjects">Сорт.: участники</option>
         <option value="source">Сорт.: источник</option>
         <option value="title">Сорт.: название</option>
@@ -272,6 +276,8 @@ async function boot() {
     HEADER.forEach((h, idx) => (o[h] = r[idx] != null ? r[idx] : ""));
     o._recNum = /^\d+$/.test(o.n_recordings) ? parseInt(o.n_recordings, 10) : null;
     o._subNum = /^\d+$/.test(o.n_subjects) ? parseInt(o.n_subjects, 10) : null;
+    o._durationMin = o.fnirs_duration_min_s ? Number(o.fnirs_duration_min_s) : null;
+    o._durationMax = o.fnirs_duration_max_s ? Number(o.fnirs_duration_max_s) : null;
     return o;
   });
   document.getElementById("subtitle").innerHTML =
@@ -334,6 +340,7 @@ const COLS = [
   { k: "modalities", label: "Модальности" },
   { k: "n_subjects", label: "N", cls: "num" },
   { k: "n_recordings", label: "Записи", cls: "num" },
+  { k: "fnirs_duration_max_s", label: "Длина fNIRS", cls: "num" },
   { k: "license", label: "Лицензия" },
   { k: "count_status", label: "Подсчёт" },
 ];
@@ -386,11 +393,12 @@ function filtered() {
 
 function sortRows(rows) {
   const k = state.sort, dir = state.asc ? 1 : -1;
-  const numeric = k === "n_recordings" || k === "n_subjects";
+  const numeric = k === "n_recordings" || k === "n_subjects" || k === "fnirs_duration_max_s";
   return rows.slice().sort((a, b) => {
     if (numeric) {
-      const av = a[k === "n_recordings" ? "_recNum" : "_subNum"];
-      const bv = b[k === "n_recordings" ? "_recNum" : "_subNum"];
+      const numericField = k === "n_recordings" ? "_recNum" : k === "n_subjects" ? "_subNum" : "_durationMax";
+      const av = a[numericField];
+      const bv = b[numericField];
       if (av == null && bv == null) return 0;
       if (av == null) return 1;
       if (bv == null) return -1;
@@ -405,6 +413,22 @@ function statusTag(s) {
   return `<span class="tag ${cls}">${STATUS_SYMBOL[s] || "—"} ${esc(s)}</span>`;
 }
 
+function humanDuration(seconds) {
+  if (!Number.isFinite(seconds)) return "";
+  if (seconds < 60) return seconds.toLocaleString("ru-RU", { maximumFractionDigits: 1 }) + " с";
+  if (seconds < 3600) return (seconds / 60).toLocaleString("ru-RU", { maximumFractionDigits: 1 }) + " мин";
+  return (seconds / 3600).toLocaleString("ru-RU", { maximumFractionDigits: 1 }) + " ч";
+}
+
+function durationRange(d) {
+  const min = d._durationMin, max = d._durationMax;
+  if (min == null && max == null) return "—";
+  if (min != null && max == null) return humanDuration(min) + "+";
+  if (min == null) return "≤ " + humanDuration(max);
+  const a = humanDuration(min), b = humanDuration(max);
+  return a === b ? a : a + "–" + b;
+}
+
 function render() {
   const rows = sortRows(filtered());
   const tbody = document.getElementById("rows");
@@ -417,6 +441,7 @@ function render() {
       <td>${mods}</td>
       <td class="num">${esc(d.n_subjects)}</td>
       <td class="num">${esc(d.n_recordings || "—")}</td>
+      <td class="num" title="${esc(d.duration_status)}">${esc(durationRange(d))}</td>
       <td>${esc(d.license)}</td>
       <td>${statusTag(d.count_status)}</td>
     </tr>`;
@@ -479,6 +504,7 @@ function openDrawer(d) {
       ${field("Популяция", d.population)}
       ${field("Участники (N)", d.n_subjects)}
       ${field("Записей", d.n_recordings || "—")}
+      ${field("Длина raw fNIRS", `${esc(durationRange(d))}<br><span class="muted">${esc(d.fnirs_duration_min_s || "—")}–${esc(d.fnirs_duration_max_s || "—")} с · ${statusTag(d.duration_status)}</span>`, true)}
       ${field("Модальности", d.modalities)}
       ${field("Формат", d.format)}
       ${field("fNIRS-формат", d.fnirs_format)}
@@ -486,6 +512,7 @@ function openDrawer(d) {
       ${field("Лицензия", d.license)}
     </div>
     ${field("Основание подсчёта", d.recording_count_basis)}
+    ${field("Основание длительности", d.duration_basis)}
     ${field("Доступ", `${esc(d.access_method)}<br><a href="${esc(d.access_url)}" target="_blank" rel="noopener">${esc(d.access_url)}</a>`, true)}
     ${field("Доказательство", `<a href="${esc(d.evidence_url)}" target="_blank" rel="noopener">${esc(d.evidence_url)}</a>`, true)}
     ${field("Заметки", d.notes)}
